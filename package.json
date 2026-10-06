@@ -1,0 +1,46 @@
+{
+  "name": "tropy-analytics",
+  "productName": "Analytics",
+  "version": "1.8.1",
+  "description": "Interactive charts and source analytics for Tropy projects.",
+  "homepage": "https://github.com/graytape/tropy-analytics",
+  "icon": "icon.svg",
+  "main": "index.js",
+  "source": "local",
+  "scripts": {
+    "build": "rollup -c rollup.config.mjs",
+    "watch": "rollup -c rollup.config.mjs -w",
+    "lint": "node --check src/plugin.js && node --check src/analytics-core.js && node --check src/graph-layout.js && node --check src/native-navigation.js && node --check src/i18n.js"
+  },
+  "author": "graytape",
+  "keywords": [
+    "tropy",
+    "analytics",
+    "visualization",
+    "history",
+    "plugin"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "files": [
+    "index.js",
+    "analytics.css",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "hooks": {},
+  "options": [],
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "rollup": "^4.52.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graytape/tropy-analytics.git"
+  }
+}
