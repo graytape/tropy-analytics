@@ -1,3 +1,5 @@
+<p align="center"><img src="icon.svg" width="88" height="88" alt="Analytics icon"></p>
+
 # Tropy Analytics
 
 Charts and connection graphs for your Tropy project. Filter by date, list, tags and metadata. All processing stays on your computer.
