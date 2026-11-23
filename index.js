@@ -1,4 +1,4 @@
-/* Tropy Analytics 1.8.1 - AGPL-3.0-or-later */
+/* Tropy Analytics 1.9.5 - AGPL-3.0-or-later */
 'use strict';
 
 const require$$0 = require('node:path');
@@ -685,7 +685,26 @@ function requireAnalyticsCore () {
 	  return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 	}
 
+	// Each matching source contributes once, grouped by its selected system date.
+	function buildCumulativeSeries(records, field = 'created') {
+	  const counts = new Map();
+	  const seen = new Set();
+	  for (const record of records || []) {
+	    if (seen.has(String(record.id))) continue
+	    seen.add(String(record.id));
+	    const parsed = parseDate(record.item?.[field === 'modified' ? 'modified' : 'created']);
+	    if (!parsed) continue
+	    const date = new Date(0);
+	    date.setUTCFullYear(parsed.year, parsed.month - 1, parsed.day);
+	    const time = date.getTime();
+	    counts.set(time, (counts.get(time) || 0) + 1);
+	  }
+	  let count = 0;
+	  return [...counts].sort((a, b) => a[0] - b[0]).map(([time, added]) => ({ time, count: count += added }))
+	}
+
 	analyticsCore = {
+	  buildCumulativeSeries,
 	  DC_TITLE,
 	  DC_DATE,
 	  DCTERMS_DATE,
@@ -901,6 +920,7 @@ function requireI18n () {
 	hasRequiredI18n = 1;
 
 	const en = {
+	  collectionGrowth: "Collection growth", growthDate: "Date used for cumulative count", noGrowthDates: "No system dates available for the matching sources.",
 	  openInLibrary: "Open in Tropy", recognizedPeople: "Recognized people", nativeTransferHelp: "Open the library with the supported list, search and required tags. Results may differ from Analytics.", nativeNested: "Nested lists are not included in Tropy’s list filter.", nativeAnyTags: "Multiple tags in “Match any” mode cannot be transferred.", nativeExcludedTags: "Excluded tags are not transferred.", nativeConditions: "Additional conditions are not transferred.", nativeYearText: "The year is searched as text, not as a date field filter.", nativeDates: "The date range is not transferred.",
 	  analytics: 'Analytics', openAnalytics: 'Open analytics', close: 'Close', filters: 'Filters',
 	  hideFilters: 'Hide filters', showFilters: 'Show filters', reset: 'Reset', dateField: 'Date field',
@@ -954,6 +974,7 @@ function requireI18n () {
 	};
 
 	const it = {
+	  collectionGrowth: "Crescita della collezione", growthDate: "Data utilizzata per il conteggio cumulativo", noGrowthDates: "Nessuna data di sistema disponibile per le fonti filtrate.",
 	  openInLibrary: "Apri in Tropy", recognizedPeople: "Persone riconosciute", nativeTransferHelp: "Apre la libreria con lista, ricerca e tag positivi supportati. I risultati possono differire da Analytics.", nativeNested: "Le sottoliste non sono incluse nel filtro lista di Tropy.", nativeAnyTags: "I tag multipli in modalità “uno qualsiasi” non sono trasferibili.", nativeExcludedTags: "I tag esclusi non vengono trasferiti.", nativeConditions: "Le condizioni aggiuntive non vengono trasferite.", nativeYearText: "L’anno viene cercato come testo, non come filtro sul campo data.", nativeDates: "L’intervallo di date non viene trasferito.",
 	  analytics: 'Analisi', openAnalytics: 'Apri le analisi', close: 'Chiudi', filters: 'Filtri',
 	  hideFilters: 'Nascondi filtri', showFilters: 'Mostra filtri', reset: 'Azzera', dateField: 'Campo data',
@@ -1010,6 +1031,7 @@ function requireI18n () {
 	};
 
 	const fr = {
+	  collectionGrowth: "Croissance de la collection", growthDate: "Date utilisée pour le cumul", noGrowthDates: "Aucune date système disponible pour les sources filtrées.",
 	  openInLibrary: "Ouvrir dans Tropy", recognizedPeople: "Personnes reconnues", nativeTransferHelp: "Ouvre la bibliothèque avec la liste, la recherche et les tags requis pris en charge. Les résultats peuvent différer d’Analytics.", nativeNested: "Les sous-listes ne sont pas incluses dans le filtre de Tropy.", nativeAnyTags: "Plusieurs tags en mode « au moins un » ne peuvent pas être transférés.", nativeExcludedTags: "Les tags exclus ne sont pas transférés.", nativeConditions: "Les conditions supplémentaires ne sont pas transférées.", nativeYearText: "L’année est recherchée comme texte et non comme filtre de date.", nativeDates: "La plage de dates n’est pas transférée.",
 	  analytics: 'Analyses', openAnalytics: 'Ouvrir les analyses', close: 'Fermer', filters: 'Filtres',
 	  hideFilters: 'Masquer les filtres', showFilters: 'Afficher les filtres', reset: 'Réinitialiser',
@@ -1057,6 +1079,7 @@ function requireI18n () {
 	};
 
 	const es = {
+	  collectionGrowth: "Crecimiento de la colección", growthDate: "Fecha utilizada para el recuento acumulado", noGrowthDates: "No hay fechas del sistema para las fuentes filtradas.",
 	  openInLibrary: "Abrir en Tropy", recognizedPeople: "Personas reconocidas", nativeTransferHelp: "Abre la biblioteca con la lista, búsqueda y etiquetas requeridas compatibles. Los resultados pueden diferir de Analytics.", nativeNested: "Las sublistas no se incluyen en el filtro de Tropy.", nativeAnyTags: "No se pueden transferir varias etiquetas en modo «cualquiera».", nativeExcludedTags: "Las etiquetas excluidas no se transfieren.", nativeConditions: "Las condiciones adicionales no se transfieren.", nativeYearText: "El año se busca como texto, no como filtro de fecha.", nativeDates: "El intervalo de fechas no se transfiere.",
 	  analytics: 'Análisis', openAnalytics: 'Abrir análisis', close: 'Cerrar', filters: 'Filtros',
 	  hideFilters: 'Ocultar filtros', showFilters: 'Mostrar filtros', reset: 'Restablecer', dateField: 'Campo de fecha',
@@ -1236,10 +1259,12 @@ function requirePlugin () {
 	    dateField: null,
 	    entityFields: [],
 	    peopleFieldsInitialized: false,
-	    settingsSchema: 2,
+	    settingsSchema: 4,
 	    fieldMappings: {},
 	    facetFields: {},
-	    visibleCharts: ['people', 'time', 'types', 'places', 'collections', 'network'],
+	    growthDate: 'created',
+	    collapsedSections: [],
+	    visibleCharts: ['growth', 'people', 'time', 'types', 'places', 'collections', 'network'],
 	    titleField: null,
 	    listId: '',
 	    includeDescendants: true,
@@ -1258,7 +1283,7 @@ function requirePlugin () {
 	    filtersOpen: true,
 	    collapsedGroups: [],
 	    networkPositions: {},
-	    chartMappingsOpen: false,
+	    chartMappingsOpen: true,
 	    networkUniformNodes: false,
 	    networkUniformLinks: false,
 	    dateOrder: 'DMY'
@@ -1270,13 +1295,16 @@ function requirePlugin () {
 	  if (!value || typeof value !== 'object') return base
 	  const settings = { ...base, ...value };
 	  if ((value.settingsSchema || 0) < 2) settings.showUndated = true;
-	  settings.settingsSchema = 2;
+	  settings.settingsSchema = 4;
 	  settings.entityFields = Array.isArray(value.entityFields) ? value.entityFields : [];
 	  settings.fieldMappings = value.fieldMappings && typeof value.fieldMappings === 'object' ? value.fieldMappings : {};
 	  settings.facetFields = value.facetFields && typeof value.facetFields === 'object' ? value.facetFields : {};
 	  settings.visibleCharts = Array.isArray(value.visibleCharts) ? value.visibleCharts : base.visibleCharts;
+	  if ((value.settingsSchema || 0) < 3 && !settings.visibleCharts.includes('growth')) settings.visibleCharts = [...settings.visibleCharts, 'growth'];
+	  settings.growthDate = value.growthDate === 'modified' ? 'modified' : 'created';
+	  settings.collapsedSections = Array.isArray(value.collapsedSections) ? value.collapsedSections.map(String) : [];
 	  settings.networkPositions = value.networkPositions && typeof value.networkPositions === 'object' ? value.networkPositions : {};
-	  settings.chartMappingsOpen = Boolean(value.chartMappingsOpen);
+	  settings.chartMappingsOpen = (value.settingsSchema || 0) < 4 || value.chartMappingsOpen !== false;
 	  settings.networkUniformNodes = Boolean(value.networkUniformNodes);
 	  settings.networkUniformLinks = Boolean(value.networkUniformLinks);
 	  settings.includeTags = Array.isArray(value.includeTags) ? value.includeTags : [];
@@ -1731,7 +1759,8 @@ function requirePlugin () {
 	    this.analytics = create('div', { className: 'ta-analytics' });
 	    this.scroller = create('div', { className: 'ta-scroller' }, this.analytics);
 	    const content = create('main', { className: 'ta-content' }, this.viewbar, this.histogram, this.scroller);
-	    this.shell = create('div', { className: 'ta-shell' }, this.sidebar, content);
+	    this.rightSidebar = create('aside', { className: 'ta-sidebar ta-right-sidebar', 'aria-label': this.t('chartSettings') });
+	    this.shell = create('div', { className: 'ta-shell' }, this.sidebar, content, this.rightSidebar);
 	    this.panel.append(header, this.shell);
 	    document.body.append(this.panel);
 	    this.applyTheme();
@@ -1885,7 +1914,7 @@ function requirePlugin () {
 	      return row
 	    };
 	    const chartToggles = [
-	      ['time', this.t('recordsOverTime')], ['types', this.t('sourceTypes')], ['places', this.t('places')],
+	      ['time', this.t('recordsOverTime')], ['growth', this.t('collectionGrowth')], ['types', this.t('sourceTypes')], ['places', this.t('places')],
 	      ['collections', this.t('collections')], ['people', this.t('people')], ['network', this.t('entityNetwork')]
 	    ].map(([key, label]) => {
 	      const selected = this.settings.visibleCharts.includes(key);
@@ -1903,7 +1932,7 @@ function requirePlugin () {
 	      )
 	    });
 	    const chartMappings = create('details', {
-	      className: 'ta-chart-mappings',
+	      className: 'ta-collapsible-section',
 	      open: this.settings.chartMappingsOpen ? '' : null,
 	      ontoggle: event => {
 	        const isOpen = event.currentTarget.open;
@@ -1912,8 +1941,8 @@ function requirePlugin () {
 	        this.persist();
 	      }
 	    },
-	    create('summary', {}, create('span', { text: this.t('chartSettings') }), create('small', { text: this.t('chartSettingsSummary') })),
-	    create('div', { className: 'ta-chart-mapping-fields' },
+	    create('summary', { text: this.t('chartSettings') }),
+	    create('div', { className: 'ta-filter-section ta-chart-mapping-fields' },
 	      create('p', { className: 'ta-help', text: this.t('chartSettingsHelp') }),
 	      settingSelect('creator', this.t('creatorField')),
 	      settingSelect('audience', this.t('audienceField')),
@@ -1923,8 +1952,7 @@ function requirePlugin () {
 	    ));
 	    const chartSettings = create('section', { className: 'ta-filter-section ta-chart-settings' },
 	      create('h3', { text: this.t('chartsToShow') }),
-	      create('div', { className: 'ta-chart-toggles' }, chartToggles),
-	      chartMappings
+	      create('div', { className: 'ta-chart-toggles' }, chartToggles)
 	    );
 	    const entityCandidates = analysisFields.peopleFields
 	      .filter(field => fields.some(candidate => String(candidate.id) === String(field.id)))
@@ -1977,8 +2005,10 @@ function requirePlugin () {
 	    const scope = create('section', { className: 'ta-filter-section' },
 	      create('h3', { text: this.t('entityFields') }),
 	      create('p', { className: 'ta-help', text: this.t('entityFieldsHelp') }),
-	      entitySelect.childElementCount ? entitySelect : this.emptyState('search', this.t('noPeopleFields'), this.t('mapPeopleFieldsFirst')),
-	      controlGroup(this.t('dateField'), dateSelect),
+	      entitySelect.childElementCount ? entitySelect : this.emptyState('search', this.t('noPeopleFields'), this.t('mapPeopleFieldsFirst'))
+	    );
+	    const collectionScope = create('section', { className: 'ta-filter-section' },
+	      create('h3', { text: this.t('list') }),
 	      controlGroup(this.t('titleField'), titleSelect),
 	      controlGroup(this.t('list'), listSelect),
 	      create('label', { className: 'ta-checkbox' },
@@ -2013,6 +2043,7 @@ function requirePlugin () {
 
 	    const range = create('section', { className: 'ta-filter-section' },
 	      create('h3', { text: this.t('dateRange') }),
+	      controlGroup(this.t('dateField'), dateSelect),
 	      create('div', { className: 'ta-range' },
 	        controlGroup(this.t('from'), from),
 	        controlGroup(this.t('to'), to)
@@ -2097,16 +2128,42 @@ function requirePlugin () {
 	      create('span', { text: this.t('showUndated') })
 	    );
 
-	    this.sidebar.append(chartSettings, scope, range, tagSection, conditions,
-	      create('section', { className: 'ta-filter-section' }, showUndated));
+	    range.append(showUndated);
+	    this.sidebar.append(
+	      this.collapsibleSection('range', range),
+	      this.collapsibleSection('collection', collectionScope),
+	      this.collapsibleSection('tags', tagSection),
+	      this.collapsibleSection('conditions', conditions));
+	    this.rightSidebar.replaceChildren(
+	      create('div', { className: 'ta-settings-bottom' }, chartMappings,
+	        this.collapsibleSection('people', scope),
+	        this.collapsibleSection('charts', chartSettings)));
 
 	    if (focusKey) {
-	      const next = this.sidebar.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`);
+	      const next = this.shell.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`);
 	      next?.focus();
 	      if (Number.isInteger(selectionStart) && next?.setSelectionRange) {
 	        next.setSelectionRange(selectionStart, selectionStart);
 	      }
 	    }
+	  }
+
+	  collapsibleSection(key, section) {
+	    const heading = section.querySelector('h3');
+	    const label = heading?.textContent || key;
+	    heading?.remove();
+	    const details = create('details', {
+	      className: 'ta-collapsible-section',
+	      open: this.settings.collapsedSections.includes(key) ? null : '',
+	      ontoggle: event => {
+	        const collapsed = new Set(this.settings.collapsedSections);
+	        if (event.currentTarget.open) collapsed.delete(key);
+	        else collapsed.add(key);
+	        this.settings.collapsedSections = [...collapsed];
+	        this.persist();
+	      }
+	    }, create('summary', { text: label }), section);
+	    return details
 	  }
 
 	  changeFieldMapping(key, value) {
@@ -2323,6 +2380,7 @@ function requirePlugin () {
 	    this.analytics.append(...[
 	      this.renderSummaryCards(data),
 	      charts.has('time') ? this.renderTrendChart(data) : null,
+	      charts.has('growth') ? this.renderGrowthChart(data) : null,
 	      charts.has('types') || charts.has('places') ? this.renderCategoryCharts(data, charts) : null,
 	      charts.has('collections') ? this.renderCollections(data) : null,
 	      charts.has('people') ? this.renderPeopleChart(data) : null,
@@ -2358,6 +2416,53 @@ function requirePlugin () {
 	      chart.append(bar);
 	    }
 	    return create('section', { className: 'ta-chart-card' }, create('header', {}, create('h2', { text: this.t('recordsOverTime') }), create('span', { text: this.t('clickYear') })), chart)
+	  }
+
+	  renderGrowthChart(data) {
+	    const mode = this.settings.growthDate;
+	    const points = core.buildCumulativeSeries(data.records, mode);
+	    const card = create('section', { className: 'ta-chart-card ta-growth-card' });
+	    const toggle = create('div', { className: 'ta-growth-toggle', role: 'group', ariaLabel: this.t('growthDate') },
+	      ...['created', 'modified'].map(key => create('button', {
+	        type: 'button', text: this.t(key), 'aria-pressed': String(mode === key),
+	        onclick: () => this.changeSetting('growthDate', key)
+	      })));
+	    card.append(create('header', {}, create('h2', { text: this.t('collectionGrowth') })), toggle);
+	    if (!points.length) {
+	      card.append(create('p', { className: 'ta-help', text: this.t('noGrowthDates') }));
+	      return card
+	    }
+	    const svg = (tag, attrs = {}, text) => {
+	      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+	      for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+	      if (text != null) node.textContent = text;
+	      return node
+	    };
+	    const chart = svg('svg', { viewBox: '0 0 720 240', role: 'img', 'aria-label': `${this.t('collectionGrowth')} — ${this.t(mode)}` });
+	    const first = points[0].time, last = points[points.length - 1].time;
+	    const total = points[points.length - 1].count;
+	    const x = time => 48 + (time - first) / Math.max(86400000, last - first) * 652;
+	    const y = count => 202 - count / total * 170;
+	    let line = 'M48 202';
+	    for (const point of points) line += ` H${x(point.time)} V${y(point.count)}`;
+	    line += ' H700';
+	    for (const count of [...new Set([0, Math.round(total / 2), total])]) {
+	      chart.append(svg('line', { x1: 48, x2: 700, y1: y(count), y2: y(count), class: 'ta-growth-grid' }),
+	        svg('text', { x: 40, y: y(count) + 4, 'text-anchor': 'end' }, count));
+	    }
+	    chart.append(svg('path', { d: `${line} V202 H48 Z`, class: 'ta-growth-area' }),
+	      svg('path', { d: line, class: 'ta-growth-line' }));
+	    const formatter = new Intl.DateTimeFormat(this.locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+	    for (const [time, anchor] of [[first, 'start'], ...(last !== first ? [[last, 'end']] : [])]) {
+	      chart.append(svg('text', { x: x(time), y: 229, 'text-anchor': anchor }, formatter.format(time)));
+	    }
+	    for (const point of points) {
+	      const dot = svg('circle', { cx: x(point.time), cy: y(point.count), r: 4, class: 'ta-growth-point' });
+	      dot.append(svg('title', {}, `${formatter.format(point.time)}: ${point.count}`));
+	      chart.append(dot);
+	    }
+	    card.append(chart);
+	    return card
 	  }
 
 	  renderCategoryCharts(data, visible = new Set(['types', 'places'])) {
